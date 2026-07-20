@@ -51,6 +51,19 @@ type Querier interface {
 	ListToolServers(ctx context.Context) ([]Toolserver, error)
 	ListTools(ctx context.Context) ([]Tool, error)
 	ListToolsForServer(ctx context.Context, arg ListToolsForServerParams) ([]Tool, error)
+	// Lists a user's tasks across every session they own (or a single session when
+	// session_id is set), filtering, ordering, and paginating server-side. total is
+	// the COUNT(*) OVER() of the full filtered set, before LIMIT/OFFSET.
+	//
+	// status_state matches task.data's persisted state string. Rows exist in two
+	// shapes: v1 (protocol_version = 'v1', state e.g. 'TASK_STATE_WORKING') and
+	// legacy (protocol_version NULL, state e.g. 'working'); the caller passes both
+	// spellings in status_v1/status_legacy so either row shape matches. The two
+	// vocabularies never overlap, so matching against both is unambiguous.
+	// data is always a JSON object (json.Marshal output), so ::jsonb never errors;
+	// the timestamp cast is guarded by a CASE (ordered evaluation) against a
+	// present-but-malformed value.
+	ListUserTasks(ctx context.Context, arg ListUserTasksParams) ([]ListUserTasksRow, error)
 	// Memory uses hard DELETE (not soft deletes), so no deleted_at filter is needed.
 	// COALESCE guards against NULL embeddings (score=0 rather than NULL); rows are still ordered last by the ORDER BY clause.
 	SearchAgentMemory(ctx context.Context, arg SearchAgentMemoryParams) ([]SearchAgentMemoryRow, error)

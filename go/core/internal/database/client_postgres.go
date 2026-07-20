@@ -313,6 +313,41 @@ func (c *postgresClient) ListTasksForSession(ctx context.Context, sessionID stri
 	return tasks, nil
 }
 
+func (c *postgresClient) ListUserTasks(ctx context.Context, params dbpkg.ListUserTasksParams) ([]*a2a.Task, int, error) {
+	arg := dbgen.ListUserTasksParams{
+		UserID:      params.UserID,
+		StatusAfter: params.StatusTimestampAfter,
+		PageOffset:  int32(params.Offset),
+		PageLimit:   int32(params.Limit),
+	}
+	if params.SessionID != "" {
+		arg.SessionID = &params.SessionID
+	}
+	if params.Status != a2a.TaskStateUnspecified {
+		v1 := string(params.Status)
+		legacy := trpcv0.LegacyTaskStateString(params.Status)
+		arg.StatusV1 = &v1
+		arg.StatusLegacy = &legacy
+	}
+
+	rows, err := c.q.ListUserTasks(ctx, arg)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to list user tasks: %w", err)
+	}
+
+	total := 0
+	tasks := make([]*a2a.Task, 0, len(rows))
+	for i, r := range rows {
+		total = int(r.Total)
+		task, err := parseVersionedTask(r.Data, r.ProtocolVersion)
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to parse task row %d: %w", i, err)
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, total, nil
+}
+
 func (c *postgresClient) DeleteTask(ctx context.Context, taskID string) error {
 	return c.q.SoftDeleteTask(ctx, taskID)
 }
